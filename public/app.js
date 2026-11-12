@@ -18,7 +18,7 @@ async function save(next) {
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
   items = next; outfit = null; $('outfit-actions').hidden = true;
-  $('outfit-result').innerHTML = '<h2>A fresh start.</h2><p>Your wardrobe changed. Find an outfit to use your latest pieces.</p>';
+  $('outfit-result').innerHTML = '<h2>Wardrobe updated</h2><p>Find an outfit with your latest pieces.</p>';
   render();
 }
 let toastTimer;
@@ -28,7 +28,7 @@ function page(name) {
   for (const button of document.querySelectorAll('nav button')) { if (button.dataset.page === name) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
   window.speechSynthesis?.cancel();
   if (name === 'tryon') renderGarments();
-  $('phone-screen').scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => page(button.dataset.page)));
 
@@ -54,19 +54,19 @@ function render() {
   $('item-count').textContent = items.length;
   const search = $('search').value.toLowerCase();
   const visible = items.filter(i => (filter === 'All pieces' || i.category === filter) && `${i.name} ${i.color} ${i.category}`.toLowerCase().includes(search));
-  $('wardrobe-grid').innerHTML = visible.length ? visible.map(card).join('') : `<div class="empty"><div class="eyebrow">${items.length ? 'A LITTLE ROOM TO EXPLORE' : 'YOUR STYLE STARTS HERE'}</div><h2>${items.length ? 'No pieces found.' : 'Let’s open your wardrobe.'}</h2><p>${items.length ? 'Try another category or search.' : 'Add your first piece, or explore a sample collection below.'}</p><button class="primary" data-add>Add clothing +</button></div>`;
+  $('wardrobe-grid').innerHTML = visible.length ? visible.map(card).join('') : `<div class="empty"><div class="eyebrow">${items.length ? 'A LITTLE ROOM TO EXPLORE' : 'YOUR STYLE STARTS HERE'}</div><h2>${items.length ? 'No pieces found.' : 'Your wardrobe starts here'}</h2><p>${items.length ? 'Try another category or search.' : 'Add a piece or try the sample wardrobe.'}</p></div>`;
   $('sample-note').hidden = !items.some(i => i.id.startsWith('sample-'));
 }
 $('filters').addEventListener('click', event => { const b = event.target.closest('[data-filter]'); if (b) { filter = b.dataset.filter; render(); $('filters').querySelector(`[data-filter="${filter}"]`).focus(); } });
 $('search').addEventListener('input', render);
 $('wardrobe-grid').addEventListener('click', event => { const b = event.target.closest('[data-edit]'); if (b) openItem(items.find(i => i.id === b.dataset.edit)); else if (event.target.closest('[data-add]')) openItem(); });
-$('load-samples').addEventListener('click', async () => { try { await save([...items, ...samples.filter(s => !items.some(i => i.id === s.id))]); toast('Sample pieces added. They’re labeled so you can tell them apart.'); } catch { toast('Browser storage is unavailable or full. Your wardrobe was not changed.'); } });
+$('load-samples').addEventListener('click', async () => { try { await save([...items, ...samples.filter(s => !items.some(i => i.id === s.id))]); toast('Sample wardrobe added.'); } catch { toast('Browser storage is unavailable or full. Your wardrobe was not changed.'); } });
 $('clear-samples').addEventListener('click', async () => { try { await save(items.filter(i => !i.id.startsWith('sample-'))); } catch { toast('Unable to update browser storage.'); } });
 for (const [id, values] of [['item-category', categories], ['item-color', Object.keys(colors)]]) $(id).innerHTML = values.map(v => `<option>${v}</option>`).join('');
 function openItem(item) {
   editing = item?.id || null; itemPhoto = item?.photo || ''; detected = [];
   $('item-form').reset(); $('analysis-review').hidden = true;
-  $('item-title').textContent = item ? 'Make it your own.' : 'A new addition.';
+  $('item-title').textContent = item ? 'Edit piece' : 'Add a piece';
   $('delete-item').hidden = !item;
   for (const key of ['name', 'category', 'color', 'style', 'warmth']) if (item) $(`item-${key}`).value = item[key];
   thumb('item-thumb', itemPhoto); $('item-dialog').showModal();
@@ -128,7 +128,7 @@ $('detected-items').addEventListener('change', fillDetected);
 $('outfit-form').addEventListener('submit', event => {
   event.preventDefault(); const preferences = Object.fromEntries(new FormData(event.target));
   outfit = recommend(items, { ...preferences, offset: offset++ });
-  $('outfit-result').innerHTML = `<h2>${outfit.items.length ? 'Consider this your starting point.' : 'A few pieces to get started.'}</h2><div class="outfit-pieces">${outfit.items.map(card).join('')}</div><p>${escape(outfit.reason)}</p>`;
+  $('outfit-result').innerHTML = `<h2>${outfit.items.length ? 'Your outfit' : 'Add a few more pieces'}</h2><div class="outfit-pieces">${outfit.items.map(card).join('')}</div><p>${escape(outfit.reason)}</p>`;
   $('outfit-actions').hidden = !outfit.items.length;
 });
 $('outfit-result').addEventListener('click', event => { const b = event.target.closest('[data-edit]'); if (b) openItem(items.find(i => i.id === b.dataset.edit)); });

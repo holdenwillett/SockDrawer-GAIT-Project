@@ -1,0 +1,84 @@
+/* iPhone-first, full-browser layout with room to grow on a laptop. */
+html { min-height: 100%; scroll-padding-bottom: 110px; }
+body { min-width: 320px; }
+.app-shell { min-height: 100svh; padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+.app-screen { min-height: 100%; }
+.app-shell header {
+  min-height: 78px;
+  padding: calc(18px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 18px max(20px, env(safe-area-inset-left));
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.app-shell .brand { font-size: 27px; gap: 9px; }
+.app-greeting { font-size: 11px; }
+.app-shell main { max-width: 1200px; padding: 28px max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left)); }
+.app-shell h1 { font-size: clamp(38px, 9vw, 58px); letter-spacing: .2px; }
+.intro { padding-bottom: 28px; }
+.intro p { font-size: 14px; }
+.intro p br { display: none; }
+.intro-note { display: none; }
+.section-heading { margin: 28px 0 20px; gap: 12px; }
+.app-shell h2 { font-size: 27px; }
+.section-heading p { display: none; }
+.primary, .secondary, .light-button, .danger { min-height: 44px; padding: 11px 14px; font-size: 13px; }
+.text-button, .icon-button { min-height: 44px; }
+.toolbar { flex-direction: column; align-items: stretch; gap: 12px; }
+.filters { flex-wrap: nowrap; overflow-x: auto; padding: 4px 2px 9px; scrollbar-width: thin; }
+.app-shell .filters button { min-height: 44px; padding: 10px 15px; font-size: 12px; }
+.app-shell .search { width: 100%; max-width: none; padding: 0 12px; }
+.app-shell .search input { min-height: 44px; padding: 10px 0; }
+input:not([type=checkbox]), select, textarea { font-size: 16px; min-height: 44px; }
+.wardrobe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; }
+.app-shell .clothing-visual { height: auto; aspect-ratio: 1 / 1.12; }
+.app-shell .clothing-card h3 { font-size: 14px; line-height: 1.4; }
+.clothing-card p { font-size: 11px; }
+.sample-tag { font-size: 9px; }
+.wardrobe-footer { gap: 16px; align-items: flex-start; font-size: 11px; }
+.wardrobe-footer .text-button { text-align: right; padding-top: 0; font-size: 12px; }
+.app-shell .bottom-banner { padding: 25px; flex-direction: column; align-items: flex-start; gap: 20px; }
+.app-shell .bottom-banner h2 { font-size: 30px; }
+.studio-layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+.app-shell .panel { min-width: 0; padding: 23px; }
+.panel label, dialog label { font-size: 14px; }
+.panel p, dialog p { font-size: 13px; }
+.consent { font-size: 13px !important; }
+.consent input { width: 20px; height: 20px; }
+.preview-art { padding-top: 15px; }
+.outfit-pieces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-shell .outfit-pieces .clothing-visual { height: auto; }
+footer { margin-top: 32px; padding: 25px 0; gap: 15px; flex-wrap: wrap; }
+footer > span:nth-child(2) { display: none; }
+.app-shell .app-navigation {
+  position: fixed;
+  z-index: 20;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 8px max(10px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  box-shadow: 0 -8px 30px #020b292e;
+}
+.app-navigation button { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 5px; padding: 9px 5px; font-size: 11px; min-height: 58px; }
+.app-navigation button svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.app-navigation button[aria-current]:after { display: none; }
+dialog { max-width: 540px; padding: 24px; max-height: 85svh; }
+dialog h2 { font-size: 28px; }
+#toast { bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 50; }
+@media (min-width: 700px) {
+  .app-shell header { padding-left: max(36px, calc((100vw - 1128px) / 2)); padding-right: max(36px, calc((100vw - 1128px) / 2)); }
+  .app-shell main { padding: 44px 36px 0; }
+  .app-shell h1 { font-size: clamp(52px, 5vw, 72px); }
+  .intro p { font-size: 16px; }
+  .section-heading p { display: block; }
+  .wardrobe-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .app-shell .bottom-banner { flex-direction: row; align-items: center; }
+  .studio-layout { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+  .app-shell .app-navigation { padding-left: max(20px, calc((100vw - 600px) / 2)); padding-right: max(20px, calc((100vw - 600px) / 2)); }
+  footer > span:nth-child(2) { display: inline; }
+}
+@media (min-width: 1050px) {
+  .wardrobe-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .toolbar { flex-direction: row; align-items: center; }
+  .app-shell .search { max-width: 240px; }
+  .app-shell .filters button { padding: 10px 13px; }
+}
