@@ -9,6 +9,31 @@ export const samples = [
   { id: 'sample-6', name: 'Leather loafers', category: 'Shoes', color: 'Black', style: 'Smart', warmth: 'Medium' }
 ];
 
+// Use only saved facts. Visual details can be reviewed after identification or entered manually.
+export function describeOutfit(outfit) {
+  if (!outfit?.items?.length) return '';
+  const transitions = ['Start with', 'Pair it with', 'Add', 'Finish with'];
+  const ending = ' These are your saved details. Make the look your own!';
+  const pieces = outfit.items.map((item, index) => `${transitions[index]} ${item.color} “${item.name}”.`);
+  // Reserve room for every piece before adding identifying details. Never drop the final garment.
+  let remaining = Math.max(0, 500 - pieces.join(' ').length - ending.length);
+  const short = (text, limit) => {
+    if (text.length <= limit) return text;
+    const cut = text.lastIndexOf(' ', limit - 1);
+    return cut > 0 ? text.slice(0, cut).replace(/[,;:]+$/, '') + '.' : '';
+  };
+  const descriptions = pieces.map((piece, index) => {
+    const item = outfit.items[index];
+    const detail = item.details || `${item.category}, ${item.style.toLowerCase()} style, rated ${item.warmth.toLowerCase()} for warmth.`;
+    const budget = Math.floor(remaining / (pieces.length - index));
+    const extra = short(detail.trim(), Math.max(0, budget - 1));
+    if (extra) { remaining -= extra.length + 1; return `${piece} ${extra}`; }
+    return piece;
+  });
+  const context = short(outfit.reason || '', Math.max(0, remaining - 1));
+  return descriptions.join(' ') + (context ? ` ${context}` : '') + ending;
+}
+
 // Deliberately transparent local matching, available without an AI account.
 export function recommend(items, { occasion = 'Everyday', weather = 'Mild', offset = 0 } = {}) {
   const smart = ['Work', 'Dinner', 'Formal'].includes(occasion);

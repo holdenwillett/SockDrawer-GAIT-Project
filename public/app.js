@@ -1,8 +1,13 @@
-import { categories, colors, samples, recommend } from '/outfits.js';
+import { categories, colors, samples, recommend, describeOutfit } from '/outfits.js';
+import { createNarrator } from '/narrator.js';
 
 const $ = id => document.getElementById(id);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let items = [], filter = 'All pieces', editing = null, itemPhoto = '', detected = [], person = '', reference = '', outfit = null, offset = 0, ai = false;
+const outfitNarrator = createNarrator($('outfit-narrator'), () => previewNarrator.stop());
+const previewNarrator = createNarrator($('preview-narrator'), () => outfitNarrator.stop());
+previewNarrator.setDescription('', 'Create a preview to get its written and spoken outfit description.');
+let previewImage = '', previewRevision = 0;
 let db;
 const database = new Promise((resolve, reject) => {
   const request = indexedDB.open('sock-drawer', 1);
@@ -18,6 +23,7 @@ async function save(next) {
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   });
   items = next; outfit = null; $('outfit-actions').hidden = true;
+  outfitNarrator.clear();
   $('outfit-result').innerHTML = '<h2>Wardrobe updated</h2><p>Find an outfit with your latest pieces.</p>';
   render();
 }
@@ -26,7 +32,7 @@ function toast(message) { $('toast').textContent = message; $('toast').hidden = 
 function page(name) {
   for (const section of document.querySelectorAll('.page')) section.hidden = section.id !== name;
   for (const button of document.querySelectorAll('nav button')) { if (button.dataset.page === name) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
-  window.speechSynthesis?.cancel();
+  outfitNarrator.stop(); previewNarrator.stop();
   if (name === 'tryon') renderGarments();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -68,7 +74,7 @@ function openItem(item) {
   $('item-form').reset(); $('analysis-review').hidden = true;
   $('item-title').textContent = item ? 'Edit piece' : 'Add a piece';
   $('delete-item').hidden = !item;
-  for (const key of ['name', 'category', 'color', 'style', 'warmth']) if (item) $(`item-${key}`).value = item[key];
+  for (const key of ['name', 'category', 'color', 'style', 'warmth', 'details']) if (item) $(`item-${key}`).value = item[key] || '';
   thumb('item-thumb', itemPhoto); $('item-dialog').showModal();
 }
 function thumb(id, photo) { $(id).hidden = !photo; if (photo) $(id).src = photo; else $(id).removeAttribute('src'); }
@@ -78,7 +84,7 @@ $('item-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (pendingPhotos) return toast('Please wait for the photo to finish loading.');
   const item = { id: editing || crypto.randomUUID(), photo: itemPhoto };
-  for (const key of ['name', 'category', 'color', 'style', 'warmth']) item[key] = $(`item-${key}`).value.trim();
+  for (const key of ['name', 'category', 'color', 'style', 'warmth', 'details']) item[key] = $(`item-${key}`).value.trim();
   if (!item.name) return toast('Give this piece a name.');
   $('save-item').disabled = true;
   try { await save(editing ? items.map(i => i.id === editing ? item : i) : [...items, item]); $('item-dialog').close(); toast('Saved to your wardrobe.'); } catch { toast('Storage is unavailable or full. The piece was not saved.'); }
@@ -120,6 +126,7 @@ function fillDetected() {
   const item = detected[Number($('detected-items').value)];
   if (!item) return;
   $('item-name').value = item.name;
+  $('item-details').value = item.details || '';
   for (const key of ['category', 'color', 'style', 'warmth']) {
     const select = $(`item-${key}`); select.value = item[key]; if (select.selectedIndex < 0) select.selectedIndex = 0;
   }
@@ -130,16 +137,9 @@ $('outfit-form').addEventListener('submit', event => {
   outfit = recommend(items, { ...preferences, offset: offset++ });
   $('outfit-result').innerHTML = `<h2>${outfit.items.length ? 'Your outfit' : 'Add a few more pieces'}</h2><div class="outfit-pieces">${outfit.items.map(card).join('')}</div><p>${escape(outfit.reason)}</p>`;
   $('outfit-actions').hidden = !outfit.items.length;
+  outfitNarrator.setDescription(describeOutfit(outfit));
 });
 $('outfit-result').addEventListener('click', event => { const b = event.target.closest('[data-edit]'); if (b) openItem(items.find(i => i.id === b.dataset.edit)); });
-$('read-outfit').addEventListener('click', () => {
-  if (!('speechSynthesis' in window)) return toast('Read-aloud is unavailable in this browser. The complete description is shown above.');
-  if (!outfit) return;
-  speechSynthesis.cancel();
-  const speech = new SpeechSynthesisUtterance(`Your outfit: ${outfit.items.map(i => `${i.color} ${i.name}`).join(', ')}. ${outfit.reason}`);
-  speech.rate = .9; speech.onerror = () => toast('Speech playback was unavailable. Your outfit description is shown above.'); speechSynthesis.speak(speech);
-});
-$('stop-reading').addEventListener('click', () => window.speechSynthesis?.cancel());
 function renderGarments() {
   const previous = $('garment-select').value;
   $('garment-select').innerHTML = '<option value="">Choose a piece…</option>' + items.map(i => `<option value="${escape(i.id)}">${escape(i.name)}${i.photo ? '' : ' (no photo)'}</option>`).join('');
@@ -166,12 +166,47 @@ $('tryon-form').addEventListener('submit', event => {
     const garment = items.find(i => i.id === $('garment-select').value);
     if (mode === 'wardrobe' && !garment) throw new Error('Choose a wardrobe piece first.');
     if (mode === 'reference' && !reference) throw new Error('Choose an outfit reference photo.');
-    const result = await api('/api/preview', { person, reference: mode === 'reference' ? reference : mode === 'wardrobe' ? garment.photo || undefined : undefined, prompt: $('try-prompt').value, consent: $('try-consent').checked });
+    previewRevision++;
+    previewNarrator.setDescription('', 'Your outfit description is being prepared. Audio will be available once it is ready.'); previewImage = '';
+    $('generated-image').hidden = true; $('generated-image').removeAttribute('src');
+    $('download-preview').hidden = true; $('download-preview').removeAttribute('href'); $('preview-disclaimer').hidden = true;
+    $('retry-description').hidden = true; $('description-status').textContent = 'Creating your preview, then describing the visible outfit…';
+    let result;
+    try {
+      result = await api('/api/preview', { person, reference: mode === 'reference' ? reference : mode === 'wardrobe' ? garment.photo || undefined : undefined, prompt: $('try-prompt').value, consent: $('try-consent').checked });
+    } catch (error) {
+      $('description-status').textContent = 'The preview could not be created. Check your inputs and try again.';
+      previewNarrator.setDescription('', 'Create a preview to get its written and spoken outfit description.');
+      throw error;
+    }
+    previewImage = result.image;
     $('generated-image').src = result.image; $('generated-image').hidden = false; $('preview-placeholder').hidden = true;
     $('download-preview').href = result.image; $('download-preview').hidden = false; $('preview-disclaimer').hidden = false;
+    previewNarrator.setDescription(result.description, 'A description is needed before this outfit can be read aloud. Choose Retry outfit description above.');
+    $('description-status').textContent = result.description ? 'Your outfit description is ready below.' : result.descriptionError || 'The outfit description is unavailable. You can retry it without creating another preview.';
+    $('retry-description').hidden = Boolean(result.description);
     toast('Your AI-generated preview is ready. Check appearance against your original.');
   });
 });
+$('retry-description').addEventListener('click', () => busy($('retry-description'), 'Describing your outfit…', async () => {
+  if (!previewImage) return;
+  // The original preview's photo consent also covers describing it, as disclosed in the form.
+  const revision = previewRevision, image = previewImage;
+  $('description-status').textContent = 'Looking at the clothing in your finished preview…';
+  previewNarrator.setDescription('', 'Your outfit description is being prepared. Audio will be available once it is ready.');
+  try {
+    const result = await api('/api/describe', { photo: image, consent: true });
+    if (revision !== previewRevision) return;
+    previewNarrator.setDescription(result.description); $('retry-description').hidden = true;
+    $('description-status').textContent = 'Your outfit description is ready below.';
+  } catch (error) {
+    if (revision === previewRevision) {
+      $('description-status').textContent = error.message;
+      previewNarrator.setDescription('', 'The description is still unavailable. Choose Retry outfit description above to try again.');
+    }
+  }
+}));
+window.addEventListener('pagehide', () => { outfitNarrator.stop(); previewNarrator.stop(); });
 $('privacy').addEventListener('click', () => $('privacy-dialog').showModal());
 $('close-privacy').addEventListener('click', () => $('privacy-dialog').close());
 try {
@@ -179,5 +214,8 @@ try {
   items = await new Promise((resolve, reject) => { const request = db.transaction('wardrobe').objectStore('wardrobe').get('items'); request.onsuccess = () => resolve(request.result || []); request.onerror = () => reject(request.error); });
 } catch { toast('Browser storage is unavailable. Enable site storage to save a wardrobe.'); }
 render();
-try { const status = await fetch('/api/status').then(r => r.json()); ai = status.ai; } catch { /* local wardrobe still works */ }
+try {
+  const status = await fetch('/api/status').then(r => r.json()); ai = status.ai;
+  outfitNarrator.setAvailable(status.narration); previewNarrator.setAvailable(status.narration);
+} catch { outfitNarrator.setAvailable(false); previewNarrator.setAvailable(false); }
 $('ai-status').textContent = ai ? 'OpenAI is connected. Photo processing may incur API charges.' : 'AI is not connected yet. Wardrobe and local outfit matching are ready to use.';

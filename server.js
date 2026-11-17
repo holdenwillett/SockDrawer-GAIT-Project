@@ -2,7 +2,8 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, sep } from 'node:path';
-import { AppError, analyze, preview } from './src/provider.js';
+import { AppError, analyze, describe, previewWithDescription } from './src/provider.js';
+import { narrate, narrationModel } from './src/narration.js';
 
 try { process.loadEnvFile(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 
@@ -13,24 +14,26 @@ async function body(req) {
   for await (const chunk of req) { size += chunk.length; if (size > 13_000_000) throw new AppError(413, 'Photos are too large. Choose smaller images.'); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString()); } catch { throw new AppError(400, 'Invalid JSON request.'); }
 }
-export function createServer() {
+export function createServer({ analyzePhoto = analyze, createPreview = previewWithDescription, describePhoto = describe, speak = narrate } = {}) {
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
     try {
       const path = new URL(req.url, 'http://localhost').pathname;
-      if (path === '/api/status' && req.method === 'GET') return json(200, { ai: Boolean(process.env.OPENAI_API_KEY), provider: 'OpenAI' });
+      if (path === '/api/status' && req.method === 'GET') return json(200, { ai: Boolean(process.env.OPENAI_API_KEY), provider: 'OpenAI', narration: Boolean(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID), narrationProvider: 'ElevenLabs', narrationModel });
       if (path.startsWith('/api/')) {
         if (req.method !== 'POST') throw new AppError(405, 'Method not allowed.');
-        if (!['/api/analyze', '/api/preview'].includes(path)) throw new AppError(404, 'Not found.');
+        if (!['/api/analyze', '/api/preview', '/api/describe', '/api/narrate'].includes(path)) throw new AppError(404, 'Not found.');
         if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) throw new AppError(403, 'Use this app from its local address.');
         if (!req.headers['content-type']?.startsWith('application/json')) throw new AppError(415, 'Use application/json.');
         const input = await body(req);
-        if (input?.consent !== true) throw new AppError(400, 'Allow photo processing before using AI.');
-        if (path === '/api/analyze') return json(200, { items: await analyze(input.photo) });
-        return json(200, { image: await preview(input) });
+        if (input?.consent !== true) throw new AppError(400, path === '/api/narrate' ? 'Allow the outfit description to be sent to ElevenLabs before creating narration.' : 'Allow photo processing before using AI.');
+        if (path === '/api/analyze') return json(200, { items: await analyzePhoto(input.photo) });
+        if (path === '/api/describe') return json(200, { description: await describePhoto(input.photo) });
+        if (path === '/api/narrate') return json(200, await speak(input.description));
+        return json(200, await createPreview(input));
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') throw new AppError(405, 'Method not allowed.');
       let file;
